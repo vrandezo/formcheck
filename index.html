@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Form checker</title>
+    <style>
+      body {
+        padding: 1em;
+      }
+      h1 {
+        font-family: sans-serif;
+      }
+      input {
+        width: 20em;
+      }
+      .action {
+        color: blue;
+        font-size: 80%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Form checker</h1>
+    <p>
+      <a href="https://github.com/vrandezo/form-checker">Instructions</a>
+    </p>
+    <p id="lexemestotal">There are</p>
+    <p>
+      Language <br>
+      <input list="languages" id="language-select" onchange="fillpos()" autofocus>
+    </p>
+    <p id="lexemesinlanguage"></p>
+    <p id="pos-choice" hidden>
+      Part of speech <br>
+      <input list="pos" id="pos-select" onchange="fillfeatures()">
+    </p>
+    <p id="lexemesinpos"></p>
+    <p id="conditions-choice" hidden>
+      Conditions <br>
+      <span onclick="addcondition()" class="action">add condition</span>
+    </p>
+    <p id="input-choice" hidden>
+      Input form <br>
+      <input list="forms" id="in-select" value="Q18514 lemma">
+    </p>
+    <p id="output-choice" hidden>
+      Output form <br>
+      <input list="forms" id="out1-select" onchange="selectedfeature(1)"> <br>
+      <span onclick="addfeature()" class="action" id="addfeature" hide>add feature</span>
+    </p>
+    <p id="formcount"></p>
+    <p id="limit-choice" hidden>
+      How many forms to check (limit)<br>
+      <input type="number" id="limit-select" value="100">
+    </p>
+    <p id="offset-choice" hidden>
+      At which one to start (offset)<br>
+      <input type="number" id="offset-select" value="0">
+    </p>
+    <p id="function-choice" hidden>
+      Function <br>
+      <input list="functions" id="function-select" value="Z801 Echo">
+    </p>
+    <p id="button-choice" hidden>
+      <input type="button" onclick="startcheck()" value="Check">
+    </p>
+    <p id="statistics"></p>
+    <table id="output" hidden>
+      <tr><th>Lexeme</th><th>Lemma</th><th>Recorded</th><th>Function</th><th>OK</th></tr>
+    </table>
+  </body>
+  <datalist id="languages"></datalist>
+  <datalist id="pos"> </datalist>
+  <datalist id="forms"></datalist>
+  <datalist id="functions">
+    <option value="Z801 Echo">
+    <option value="Z10187 upper">
+    <option value="Z10056 remove whitespace">
+    <option value="Z10026 say twice">
+    <option value="Z10072 To uppercase">
+    <option value="Z10210 Add s to end">
+  </datalist>
+  <script>
+const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
+
+async function countlexemes() {
+  const query = `
+  select (count(?lexemeId) as ?count) {
+    ?lexemeId a ontolex:LexicalEntry .
+  }
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  const count = answer.results.bindings[0].count.value
+  document.getElementById('lexemestotal').innerHTML = `There are ${count} lexemes in total.`
+}
+
+async function filllanguage() {
+  const query = `
+  SELECT ?language ?languageLabel WHERE {
+    { select distinct ?language {
+      ?lexemeId dct:language ?language .
+    } }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+  } ORDER BY ?languageLabel
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  languages = document.getElementById('languages')
+  for (const result of answer.results.bindings) {
+    var option = document.createElement('option');
+    option.value = result.language.value.split('y/')[1] + ' ' +
+      result.languageLabel.value;
+    languages.appendChild(option);
+  }
+  countlexemes()
+}
+
+filllanguage()
+
+async function countlexemesinlanguage(languageId) {
+  const query = `
+  select (count(?lexemeId) as ?count) {
+    ?lexemeId a ontolex:LexicalEntry .
+    ?lexemeId dct:language wd:${languageId} .
+  }
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  const count = answer.results.bindings[0].count.value
+  document.getElementById('lexemesinlanguage').innerHTML = `${count} lexemes`
+}
+
+async function fillpos() {
+  const languageId = document.getElementById('language-select').value.split(' ')[0]
+  await countlexemesinlanguage(languageId)
+  const query = `
+  SELECT ?pos ?posLabel WHERE {
+    { select distinct ?pos where {
+      ?lexemeId dct:language wd:${languageId} .
+      ?lexemeId wikibase:lexicalCategory ?pos .
+    } }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+  } order by ?posLabel
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  poses = document.getElementById('pos')
+  while (poses.firstChild) poses.removeChild(poses.firstChild)
+  for (const result of answer.results.bindings) {
+    var option = document.createElement('option');
+    option.value = result.pos.value.split('y/')[1] + ' ' +
+      result.posLabel.value;
+    poses.appendChild(option);
+  }
+  document.getElementById('pos-choice').hidden = false
+  document.getElementById('pos-select').focus()
+}
+
+async function countlexemesinpos(languageId, posId) {
+  const query = `
+  select (count(?lexemeId) as ?count) {
+    ?lexemeId a ontolex:LexicalEntry .
+    ?lexemeId dct:language wd:${languageId} .
+    ?lexemeId wikibase:lexicalCategory wd:${posId} .
+  }
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  const count = answer.results.bindings[0].count.value
+  document.getElementById('lexemesinpos').innerHTML = `${count} lexemes`
+}
+
+async function fillfeatures() {
+  const languageId = document.getElementById('language-select').value.split(' ')[0]
+  const posId = document.getElementById('pos-select').value.split(' ')[0]
+  await countlexemesinpos(languageId, posId)
+  const query = `
+  select ?feature ?featureLabel { {
+    select distinct ?feature where {
+      ?lexemeId dct:language wd:${languageId} .
+      ?lexemeId wikibase:lexicalCategory wd:${posId} .
+      ?lexemeId ontolex:lexicalForm ?form .
+      ?form wikibase:grammaticalFeature ?feature .
+    } }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+    } order by ?featureLabel
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  forms = document.getElementById('forms')
+  while (forms.firstChild) forms.removeChild(forms.firstChild)
+  for (const result of answer.results.bindings) {
+    var option = document.createElement('option');
+    option.value = result.feature.value.split('y/')[1] + ' ' +
+      result.featureLabel.value;
+    forms.appendChild(option);
+  }
+  // TODO document.getElementById('conditions-choice').hidden = false
+  // TODO document.getElementById('input-choice').hidden = false
+  document.getElementById('output-choice').hidden = false
+  document.getElementById('out1-select').focus()
+}
+
+async function selectedfeature(depth) {
+  const languageId = document.getElementById('language-select').value.split(' ')[0]
+  const posId = document.getElementById('pos-select').value.split(' ')[0]
+  const features = []
+  for (var i = 0; i < depth; i++) {
+    const choiceid = `out${i+1}-select`
+    features.push(document.getElementById(choiceid).value.split(' ')[0])
+  }
+  var query = `
+  ask {
+    ?lexemeId dct:language wd:${languageId} .
+    ?lexemeId wikibase:lexicalCategory wd:${posId} .
+    ?lexemeId ontolex:lexicalForm ?form .
+  `
+  for (const feature of features) {
+    query += `?form wikibase:grammaticalFeature wd:${feature} . `
+  }
+  query += `
+    filter not exists {
+      ?form wikibase:grammaticalFeature ?unwanted.
+      filter(?unwanted not in (wd:${features.join(',wd:')}) )
+    }
+  }
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  if (answer.boolean) {
+    getready(languageId, posId, features)
+  } else {
+    addfeature()
+  }
+}
+
+async function addfeature() {
+  const features = []
+  var i = 0
+  while (true) {
+    i += 1
+    if (document.getElementById(`out${i}-select`)) {
+      features.push(document.getElementById(`out${1}-select`).value.split(' ')[0])
+    } else break
+  }
+  const depth = features.length + 1
+  const br = document.createElement("br")
+  const input = document.createElement("input")
+  input.setAttribute("id", `out${depth}-select`)
+  input.setAttribute("list", "forms")
+  input.setAttribute("onchange", `selectedfeature(${depth})`)
+  document.getElementById(`out${depth-1}-select`).after(br, input)
+  input.focus()
+}
+
+// TODO: this times out for English plurals
+async function countforms(languageId, posId, features) {
+  const query = `
+  select (count(?form) as ?count) {
+    ?lexemeId dct:language wd:${languageId} .
+    ?lexemeId wikibase:lexicalCategory wd:${posId} .
+    ?lexemeId ontolex:lexicalForm ?form .
+    ?form wikibase:grammaticalFeature wd:${features[0]} .
+    filter not exists {
+      ?form wikibase:grammaticalFeature ?unwanted.
+      filter(?unwanted not in (wd:${features[0]}) )
+    }
+  }
+  `
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const response = await fetch(sparql)
+  const answer = await response.json()
+  const count = answer.results.bindings[0].count.value
+  document.getElementById('formcount').innerHTML = `${count} forms`
+}
+
+async function getready(languageId, posId, features) {
+  document.getElementById('addfeature').hidden = false
+  // TODO: await countforms(languageId, posId, features)
+  document.getElementById('limit-choice').hidden = false
+  document.getElementById('offset-choice').hidden = false
+  document.getElementById('function-choice').hidden = false
+  document.getElementById('button-choice').hidden = false
+  document.getElementById('function-select').focus()
+}
+
+async function startcheck() {
+  const languageId = document.getElementById('language-select').value.split(' ')[0]
+  const posId = document.getElementById('pos-select').value.split(' ')[0]
+  const functionId = document.getElementById('function-select').value.split(' ')[0]
+  const limit = document.getElementById('limit-select').value
+  const offset = document.getElementById('offset-select').value
+  var i = 0
+  const features = []
+  while (true) {
+    i += 1
+    if (document.getElementById(`out${i}-select`)) {
+      features.push(document.getElementById(`out${i}-select`).value.split(' ')[0])
+    } else break
+  }
+  var query = `
+    SELECT ?lexemeId ?form ?lemma ?representation WHERE {
+      ?lexemeId dct:language wd:${languageId} .
+      ?lexemeId wikibase:lemma ?lemma .
+      ?lexemeId wikibase:lexicalCategory wd:${posId} .
+      ?lexemeId ontolex:lexicalForm ?form .
+  `
+  for (feature of features) {
+    query += `?form wikibase:grammaticalFeature wd:${feature} . `
+  }
+  query += `
+      ?form ontolex:representation ?representation .
+  } order by ?lemma limit ${limit} offset ${offset}`
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  const answer = await (await fetch(sparql)).json()
+  var successes = 0
+  var fails = 0
+  document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (100.00%)`
+  document.getElementById('output').hidden = false
+  for (const line of answer.results.bindings) {
+    const row = document.getElementById("output").insertRow(1)
+    row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
+    row.insertCell().innerHTML = line.lemma.value
+    row.insertCell().innerHTML = line.representation.value
+    singular = line.lemma.value
+    const wikifunction = `https://wikifunctions.beta.wmflabs.org/w/api.php?` +
+      `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
+      `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${functionId}%22%2C%20%22` +
+      `${functionId}K1%22%3A%20%22${singular}%22%20%7D&formatversion=2&origin=*`
+    const headers = {
+      'Content-Type': 'application/json',
+      'origin': '*'
+    }
+    const res = await fetch(wikifunction, { headers })
+    const result = await res.json()
+    const text = result.query.wikilambda_function_call.data
+    const jsonnn = JSON.parse(text)
+    row.insertCell().innerHTML = jsonnn.Z22K1
+    if (jsonnn.Z22K1 == line.representation.value) {
+      row.insertCell().innerHTML += `✅ `
+      successes += 1
+    } else {
+      row.insertCell().innerHTML += `❌`
+      fails += 1
+    }
+    document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (${(100.0*successes/(successes+fails)).toFixed(2)}%)`
+  }
+}
+  </script>
+</html>
