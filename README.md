@@ -9,3 +9,5 @@ function evaluating on the lemma indeed results in the output form.
 You can select an arbitrary Z-id for the function, not just one from the given
 list. You can also choose arbitrary Q-ids in all the above fields, although
 the system tries to offer you sensible choices.
+
+This is deployed on Github pages: https://vrandezo.github.com/formcheck
