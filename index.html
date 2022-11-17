@@ -17,6 +17,19 @@
         color: blue;
         font-size: 80%;
       }
+      .throbber {
+	      position: absolute;
+	      color: DimGray;
+      }
+      .throbber + p {
+	      opacity: 0;
+      }
+      .throbberimage {
+	      background-image:  url('https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Ajax_loader_metal_512.gif/220px-Ajax_loader_metal_512.gif');  
+	      background-position: 0px; 
+	      background-repeat:no-repeat; 
+	      background-size: contain;
+      }
     </style>
   </head>
   <body>
@@ -24,7 +37,7 @@
     <p>
       <a href="https://github.com/vrandezo/formcheck">Instructions</a>
     </p>
-    <p id="lexemestotal">There are</p>
+    <p id="lexemestotal">&nbsp;</p>
     <p>
       Language <br>
       <input list="languages" id="language-select" onchange="fillpos()" autofocus>
@@ -34,7 +47,7 @@
       Part of speech <br>
       <input list="pos" id="pos-select" onchange="fillfeatures()">
     </p>
-    <p id="lexemesinpos"></p>
+    <p id="lexemesinpos">&nbsp;</p>
     <p id="conditions-choice" hidden>
       Conditions <br>
       <span onclick="addcondition()" class="action">add condition</span>
@@ -85,7 +98,29 @@
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
 
+function throbelement(elementid, throbtext) {
+  console.log(`Throbbing ${elementid}`)
+  unthrob()
+  const targetelement=document.getElementById(elementid)
+  const throbdiv=document.createElement('div')
+  throbdiv.className='throbber'
+  targetelement.parentNode.insertBefore(throbdiv, targetelement);
+  const imageelement=document.createElement('span')
+  imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
+  imageelement.className='throbberimage'
+  throbdiv.insertBefore(imageelement, null);
+  const textelement=document.createElement('span')
+  textelement.innerHTML = throbtext + '...'
+  throbdiv.insertBefore(textelement, null);
+}
+
+function unthrob() {
+	throbelements = document.getElementsByClassName('throbber')
+	Array.from(throbelements).forEach(element => element.remove())
+}
+
 async function countlexemes() {
+  throbelement('lexemestotal', 'Counting lexemes')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -96,9 +131,11 @@ async function countlexemes() {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemestotal').innerHTML = `There are ${count} lexemes in total.`
+  unthrob()
 }
 
 async function filllanguage() {
+  throbelement('lexemestotal', 'Retrieving languages')
   const query = `
   SELECT ?language ?languageLabel WHERE {
     { select distinct ?language {
@@ -123,6 +160,7 @@ async function filllanguage() {
 filllanguage()
 
 async function countlexemesinlanguage(languageId) {
+  throbelement('lexemesinlanguage', 'Counting lexemes')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -139,6 +177,8 @@ async function countlexemesinlanguage(languageId) {
 async function fillpos() {
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   await countlexemesinlanguage(languageId)
+  document.getElementById('pos-choice').hidden = false
+  throbelement('pos-choice', 'Retrieving parts of speech')
   const query = `
   SELECT ?pos ?posLabel WHERE {
     { select distinct ?pos where {
@@ -159,11 +199,12 @@ async function fillpos() {
       result.posLabel.value;
     poses.appendChild(option);
   }
-  document.getElementById('pos-choice').hidden = false
+  unthrob()
   document.getElementById('pos-select').focus()
 }
 
 async function countlexemesinpos(languageId, posId) {
+  throbelement('lexemesinpos', 'Counting lexemes')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -176,12 +217,15 @@ async function countlexemesinpos(languageId, posId) {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemesinpos').innerHTML = `${count} lexemes`
+  unthrob()
 }
 
 async function fillfeatures() {
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   await countlexemesinpos(languageId, posId)
+  document.getElementById('output-choice').hidden = false
+  throbelement('output-choice', 'Fetching output choices')
   const query = `
   select ?feature ?featureLabel { {
     select distinct ?feature where {
@@ -206,8 +250,8 @@ async function fillfeatures() {
   }
   // TODO document.getElementById('conditions-choice').hidden = false
   // TODO document.getElementById('input-choice').hidden = false
-  document.getElementById('output-choice').hidden = false
   document.getElementById('out1-select').focus()
+  unthrob()
 }
 
 async function selectedfeature(depth) {
@@ -295,6 +339,7 @@ async function getready(languageId, posId, features) {
 }
 
 async function startcheck() {
+  throbelement('button-choice', 'Fetching representations')
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   const functionId = document.getElementById('function-select').value.split(' ')[0]
@@ -327,6 +372,7 @@ async function startcheck() {
   var fails = 0
   document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (100.00%)`
   document.getElementById('output').hidden = false
+  throbelement('button-choice', 'Checking representations')
   for (const line of answer.results.bindings) {
     const row = document.getElementById("output").insertRow(1)
     row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
@@ -355,6 +401,7 @@ async function startcheck() {
     }
     document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (${(100.0*successes/(successes+fails)).toFixed(2)}%)`
   }
+  unthrob()
 }
   </script>
 </html>
