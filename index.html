@@ -98,29 +98,36 @@
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
 
+var throbdiv
+var throbtextelement
 function throbelement(elementid, throbtext) {
   console.log(`Throbbing ${elementid}`)
-  unthrob()
+  if (throbdiv) unthrob()
   const targetelement=document.getElementById(elementid)
-  const throbdiv=document.createElement('div')
+  throbdiv=document.createElement('div')
   throbdiv.className='throbber'
   targetelement.parentNode.insertBefore(throbdiv, targetelement);
   const imageelement=document.createElement('span')
   imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
   imageelement.className='throbberimage'
   throbdiv.insertBefore(imageelement, null);
-  const textelement=document.createElement('span')
-  textelement.innerHTML = throbtext + '...'
-  throbdiv.insertBefore(textelement, null);
+  throbtextelement=document.createElement('span')
+  throbtextelement.className='throbbertext'
+  throbberprogress(throbtext)
+  throbdiv.insertBefore(throbtextelement, null);
+}
+
+function throbberprogress(throbtext) {
+	throbtextelement.innerHTML = throbtext
 }
 
 function unthrob() {
-	throbelements = document.getElementsByClassName('throbber')
-	Array.from(throbelements).forEach(element => element.remove())
+	throbdiv.remove()
+	throbdiv=null
 }
 
 async function countlexemes() {
-  throbelement('lexemestotal', 'Counting lexemes')
+  throbberprogress('Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -135,7 +142,7 @@ async function countlexemes() {
 }
 
 async function filllanguage() {
-  throbelement('lexemestotal', 'Retrieving languages')
+  throbelement('lexemestotal', 'Retrieving languages...')
   const query = `
   SELECT ?language ?languageLabel WHERE {
     { select distinct ?language {
@@ -160,7 +167,7 @@ async function filllanguage() {
 filllanguage()
 
 async function countlexemesinlanguage(languageId) {
-  throbelement('lexemesinlanguage', 'Counting lexemes')
+  throbelement('lexemesinlanguage', 'Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -178,7 +185,7 @@ async function fillpos() {
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   await countlexemesinlanguage(languageId)
   document.getElementById('pos-choice').hidden = false
-  throbelement('pos-choice', 'Retrieving parts of speech')
+  throbelement('pos-choice', 'Retrieving parts of speech...')
   const query = `
   SELECT ?pos ?posLabel WHERE {
     { select distinct ?pos where {
@@ -204,7 +211,7 @@ async function fillpos() {
 }
 
 async function countlexemesinpos(languageId, posId) {
-  throbelement('lexemesinpos', 'Counting lexemes')
+  throbelement('lexemesinpos', 'Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -225,7 +232,7 @@ async function fillfeatures() {
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   await countlexemesinpos(languageId, posId)
   document.getElementById('output-choice').hidden = false
-  throbelement('output-choice', 'Fetching output choices')
+  throbelement('output-choice', 'Fetching output choices...')
   const query = `
   select ?feature ?featureLabel { {
     select distinct ?feature where {
@@ -339,7 +346,7 @@ async function getready(languageId, posId, features) {
 }
 
 async function startcheck() {
-  throbelement('button-choice', 'Fetching representations')
+  throbelement('button-choice', 'Fetching representations...')
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   const functionId = document.getElementById('function-select').value.split(' ')[0]
@@ -372,8 +379,8 @@ async function startcheck() {
   var fails = 0
   document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (100.00%)`
   document.getElementById('output').hidden = false
-  throbelement('button-choice', 'Checking representations')
   for (const line of answer.results.bindings) {
+	  throbberprogress(`Checking representation ${successes + fails + 1} of ${answer.results.bindings.length}`)
     const row = document.getElementById("output").insertRow(1)
     row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
     row.insertCell().innerHTML = line.lemma.value
