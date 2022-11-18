@@ -31,6 +31,7 @@
 	      background-size: contain;
       }
     </style>
+    <style id="hidesuccesses"></style>
   </head>
   <body>
     <h1>Form checker</h1>
@@ -77,6 +78,9 @@
     <p id="button-choice" hidden>
       <input type="button" onclick="startcheck()" value="Check">
     </p>
+    <p id="button-filter" hidden>
+      <input id="button-filter-input" type="button" onclick="filterresults()" value="Hide Successes">
+    </p>
     <p id="statistics"></p>
     <table id="output" hidden>
       <tr><th>Lexeme</th><th>Lemma</th><th>Recorded</th><th>Function</th><th>OK</th></tr>
@@ -97,6 +101,17 @@
   </datalist>
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
+
+function filterresults() {
+  if (document.getElementById('hidesuccesses').innerHTML) {
+    document.getElementById('hidesuccesses').innerHTML = ""
+    document.getElementById('button-filter-input').value="Hide Successes"
+  }
+  else {
+    document.getElementById('hidesuccesses').innerHTML=".success {display:none;}"
+    document.getElementById('button-filter-input').value="Show Successes"
+  }
+}
 
 var throbdiv
 var throbtextelement
@@ -378,6 +393,7 @@ async function startcheck() {
   var successes = 0
   var fails = 0
   document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (100.00%)`
+  document.getElementById('button-filter').hidden = false
   document.getElementById('output').hidden = false
   for (const line of answer.results.bindings) {
 	  throbberprogress(`Checking representation ${successes + fails + 1} of ${answer.results.bindings.length}`)
@@ -401,9 +417,11 @@ async function startcheck() {
     row.insertCell().innerHTML = jsonnn.Z22K1
     if (jsonnn.Z22K1 == line.representation.value) {
       row.insertCell().innerHTML += `✅ `
+      row.className='success'
       successes += 1
     } else {
       row.insertCell().innerHTML += `❌`
+      row.className='failure'
       fails += 1
     }
     document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (${(100.0*successes/(successes+fails)).toFixed(2)}%)`
