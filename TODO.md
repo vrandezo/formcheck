@@ -1,4 +1,3 @@
-- allow to start from a specific prefix
 - what happens if you move back into a previous field
 - make input choice selectable
 - conditions (grammatical gender, etc)
