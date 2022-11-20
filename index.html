@@ -120,18 +120,17 @@ function filterresults() {
 var throbdiv
 var throbtextelement
 function throbelement(elementid, throbtext) {
-  console.log(`Throbbing ${elementid}`)
   if (throbdiv) unthrob()
-  const targetelement=document.getElementById(elementid)
-  throbdiv=document.createElement('div')
+  const targetelement = document.getElementById(elementid)
+  throbdiv = document.createElement('div')
   throbdiv.className='throbber'
   targetelement.parentNode.insertBefore(throbdiv, targetelement);
-  const imageelement=document.createElement('span')
+  const imageelement = document.createElement('span')
   imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
-  imageelement.className='throbberimage'
+  imageelement.className = 'throbberimage'
   throbdiv.insertBefore(imageelement, null);
   throbtextelement=document.createElement('span')
-  throbtextelement.className='throbbertext'
+  throbtextelement.className = 'throbbertext'
   throbberprogress(throbtext)
   throbdiv.insertBefore(throbtextelement, null);
 }
