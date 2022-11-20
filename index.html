@@ -62,7 +62,7 @@
       <input list="forms" id="out1-select" onchange="selectedfeature(1)"> <br>
       <span onclick="addfeature()" class="action" id="addfeature" hide>add feature</span>
     </p>
-    <p id="formcount"></p>
+    <p id="formcount">&nbsp;</p>
     <p id="lemma-filter-input" hidden>
       Lemma filter (default operator =)<br>
       <input id="lemma-filter-text">
@@ -334,28 +334,35 @@ async function addfeature() {
 
 // TODO: this times out for English plurals
 async function countforms(languageId, posId, features) {
-  const query = `
-  select (count(?form) as ?count) {
+  throbelement('formcount', 'Counting forms...')
+  var query = `
+  select (COUNT(?featurecount) as ?count) 
+  WHERE {SELECT ?form (COUNT(?form) as ?featurecount) WHERE { 
     ?lexemeId dct:language wd:${languageId} .
     ?lexemeId wikibase:lexicalCategory wd:${posId} .
     ?lexemeId ontolex:lexicalForm ?form .
-    ?form wikibase:grammaticalFeature wd:${features[0]} .
-    filter not exists {
-      ?form wikibase:grammaticalFeature ?unwanted.
-      filter(?unwanted not in (wd:${features[0]}) )
-    }
+    `
+  for (const feature of features) {
+    query += `?form wikibase:grammaticalFeature wd:${feature} . 
+    `
   }
+  query += `
+  ?form wikibase:grammaticalFeature ?unwanted. 
+  } GROUP by ?form
+HAVING (?featurecount = ${features.length})
+}
   `
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
   const response = await fetch(sparql)
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('formcount').innerHTML = `${count} forms`
+  unthrob()
 }
 
 async function getready(languageId, posId, features) {
   document.getElementById('addfeature').hidden = false
-  // TODO: await countforms(languageId, posId, features)
+  await countforms(languageId, posId, features)
   document.getElementById('lemma-filter-input').hidden = false
   document.getElementById('limit-choice').hidden = false
   document.getElementById('offset-choice').hidden = false
