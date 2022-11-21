@@ -332,12 +332,11 @@ async function addfeature() {
   input.focus()
 }
 
-// TODO: this times out for English plurals
 async function countforms(languageId, posId, features) {
   throbelement('formcount', 'Counting forms...')
   var query = `
-  select (COUNT(?featurecount) as ?count) 
-  WHERE {SELECT ?form (COUNT(?form) as ?featurecount) WHERE { 
+  SELECT (COUNT(?featurecount) as ?count) WHERE {
+    SELECT ?form (COUNT(?form) as ?featurecount) WHERE { 
     ?lexemeId dct:language wd:${languageId} .
     ?lexemeId wikibase:lexicalCategory wd:${posId} .
     ?lexemeId ontolex:lexicalForm ?form .
@@ -387,11 +386,12 @@ async function startcheck() {
     } else break
   }
   var query = `
-    SELECT ?lexemeId ?form ?lemma ?representation WHERE {
+    SELECT ?lexemeId ?form ?lemma ?representation (COUNT(?form) as ?featurecount) WHERE {
       ?lexemeId dct:language wd:${languageId} .
       ?lexemeId wikibase:lemma ?lemma .
       ?lexemeId wikibase:lexicalCategory wd:${posId} .
       ?lexemeId ontolex:lexicalForm ?form .
+      ?form wikibase:grammaticalFeature ?unwanted. 
   `
   for (feature of features) {
     query += `?form wikibase:grammaticalFeature wd:${feature} . `
@@ -428,7 +428,9 @@ async function startcheck() {
       query += ")"
   }
   query += `
-  } order by ?lemma limit ${limit} offset ${offset}`
+  }  GROUP by ?lexemeId ?form ?lemma ?representation 
+    HAVING (?featurecount = ${features.length})
+  order by ?lemma limit ${limit} offset ${offset}`
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
   const answer = await (await fetch(sparql)).json()
   var successes = 0
