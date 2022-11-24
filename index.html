@@ -17,14 +17,28 @@
         color: blue;
         font-size: 80%;
       }
+      .throbber {
+	      position: absolute;
+	      color: DimGray;
+      }
+      .throbber + p {
+	      opacity: 0;
+      }
+      .throbberimage {
+	      background-image:  url('https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Ajax_loader_metal_512.gif/220px-Ajax_loader_metal_512.gif');  
+	      background-position: 0px; 
+	      background-repeat:no-repeat; 
+	      background-size: contain;
+      }
     </style>
+    <style id="hidesuccesses"></style>
   </head>
   <body>
     <h1>Form checker</h1>
     <p>
       <a href="https://github.com/vrandezo/formcheck">Instructions</a>
     </p>
-    <p id="lexemestotal">There are</p>
+    <p id="lexemestotal">&nbsp;</p>
     <p>
       Language <br>
       <input list="languages" id="language-select" onchange="fillpos()" autofocus>
@@ -34,7 +48,7 @@
       Part of speech <br>
       <input list="pos" id="pos-select" onchange="fillfeatures()">
     </p>
-    <p id="lexemesinpos"></p>
+    <p id="lexemesinpos">&nbsp;</p>
     <p id="conditions-choice" hidden>
       Conditions <br>
       <span onclick="addcondition()" class="action">add condition</span>
@@ -48,7 +62,11 @@
       <input list="forms" id="out1-select" onchange="selectedfeature(1)"> <br>
       <span onclick="addfeature()" class="action" id="addfeature" hide>add feature</span>
     </p>
-    <p id="formcount"></p>
+    <p id="formcount">&nbsp;</p>
+    <p id="lemma-filter-input" hidden>
+      Lemma filter (default operator =)<br>
+      <input id="lemma-filter-text">
+    </p>
     <p id="limit-choice" hidden>
       How many forms to check (limit)<br>
       <input type="number" id="limit-select" value="100">
@@ -63,6 +81,9 @@
     </p>
     <p id="button-choice" hidden>
       <input type="button" onclick="startcheck()" value="Check">
+    </p>
+    <p id="button-filter" hidden>
+      <input id="button-filter-input" type="button" onclick="filterresults()" value="Hide Successes">
     </p>
     <p id="statistics"></p>
     <table id="output" hidden>
@@ -85,7 +106,46 @@
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
 
+function filterresults() {
+  if (document.getElementById('hidesuccesses').innerHTML) {
+    document.getElementById('hidesuccesses').innerHTML = ""
+    document.getElementById('button-filter-input').value="Hide Successes"
+  }
+  else {
+    document.getElementById('hidesuccesses').innerHTML=".success {display:none;}"
+    document.getElementById('button-filter-input').value="Show Successes"
+  }
+}
+
+var throbdiv
+var throbtextelement
+function throbelement(elementid, throbtext) {
+  if (throbdiv) unthrob()
+  const targetelement = document.getElementById(elementid)
+  throbdiv = document.createElement('div')
+  throbdiv.className='throbber'
+  targetelement.parentNode.insertBefore(throbdiv, targetelement);
+  const imageelement = document.createElement('span')
+  imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
+  imageelement.className = 'throbberimage'
+  throbdiv.insertBefore(imageelement, null);
+  throbtextelement=document.createElement('span')
+  throbtextelement.className = 'throbbertext'
+  throbberprogress(throbtext)
+  throbdiv.insertBefore(throbtextelement, null);
+}
+
+function throbberprogress(throbtext) {
+	throbtextelement.innerHTML = throbtext
+}
+
+function unthrob() {
+	throbdiv.remove()
+	throbdiv=null
+}
+
 async function countlexemes() {
+  throbberprogress('Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -96,9 +156,11 @@ async function countlexemes() {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemestotal').innerHTML = `There are ${count} lexemes in total.`
+  unthrob()
 }
 
 async function filllanguage() {
+  throbelement('lexemestotal', 'Retrieving languages...')
   const query = `
   SELECT ?language ?languageLabel WHERE {
     { select distinct ?language {
@@ -123,6 +185,7 @@ async function filllanguage() {
 filllanguage()
 
 async function countlexemesinlanguage(languageId) {
+  throbelement('lexemesinlanguage', 'Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -139,6 +202,8 @@ async function countlexemesinlanguage(languageId) {
 async function fillpos() {
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   await countlexemesinlanguage(languageId)
+  document.getElementById('pos-choice').hidden = false
+  throbelement('pos-choice', 'Retrieving parts of speech...')
   const query = `
   SELECT ?pos ?posLabel WHERE {
     { select distinct ?pos where {
@@ -159,11 +224,12 @@ async function fillpos() {
       result.posLabel.value;
     poses.appendChild(option);
   }
-  document.getElementById('pos-choice').hidden = false
+  unthrob()
   document.getElementById('pos-select').focus()
 }
 
 async function countlexemesinpos(languageId, posId) {
+  throbelement('lexemesinpos', 'Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -176,12 +242,15 @@ async function countlexemesinpos(languageId, posId) {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemesinpos').innerHTML = `${count} lexemes`
+  unthrob()
 }
 
 async function fillfeatures() {
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   await countlexemesinpos(languageId, posId)
+  document.getElementById('output-choice').hidden = false
+  throbelement('output-choice', 'Fetching output choices...')
   const query = `
   select ?feature ?featureLabel { {
     select distinct ?feature where {
@@ -206,8 +275,8 @@ async function fillfeatures() {
   }
   // TODO document.getElementById('conditions-choice').hidden = false
   // TODO document.getElementById('input-choice').hidden = false
-  document.getElementById('output-choice').hidden = false
   document.getElementById('out1-select').focus()
+  unthrob()
 }
 
 async function selectedfeature(depth) {
@@ -263,30 +332,37 @@ async function addfeature() {
   input.focus()
 }
 
-// TODO: this times out for English plurals
 async function countforms(languageId, posId, features) {
-  const query = `
-  select (count(?form) as ?count) {
+  throbelement('formcount', 'Counting forms...')
+  var query = `
+  SELECT (COUNT(?featurecount) as ?count) WHERE {
+    SELECT ?form (COUNT(?form) as ?featurecount) WHERE { 
     ?lexemeId dct:language wd:${languageId} .
     ?lexemeId wikibase:lexicalCategory wd:${posId} .
     ?lexemeId ontolex:lexicalForm ?form .
-    ?form wikibase:grammaticalFeature wd:${features[0]} .
-    filter not exists {
-      ?form wikibase:grammaticalFeature ?unwanted.
-      filter(?unwanted not in (wd:${features[0]}) )
-    }
+    `
+  for (const feature of features) {
+    query += `?form wikibase:grammaticalFeature wd:${feature} . 
+    `
   }
+  query += `
+  ?form wikibase:grammaticalFeature ?unwanted. 
+  } GROUP by ?form
+HAVING (?featurecount = ${features.length})
+}
   `
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
   const response = await fetch(sparql)
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('formcount').innerHTML = `${count} forms`
+  unthrob()
 }
 
 async function getready(languageId, posId, features) {
   document.getElementById('addfeature').hidden = false
-  // TODO: await countforms(languageId, posId, features)
+  await countforms(languageId, posId, features)
+  document.getElementById('lemma-filter-input').hidden = false
   document.getElementById('limit-choice').hidden = false
   document.getElementById('offset-choice').hidden = false
   document.getElementById('function-choice').hidden = false
@@ -295,6 +371,7 @@ async function getready(languageId, posId, features) {
 }
 
 async function startcheck() {
+  throbelement('button-choice', 'Fetching representations...')
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   const functionId = document.getElementById('function-select').value.split(' ')[0]
@@ -309,25 +386,60 @@ async function startcheck() {
     } else break
   }
   var query = `
-    SELECT ?lexemeId ?form ?lemma ?representation WHERE {
+    SELECT ?lexemeId ?form ?lemma ?representation (COUNT(?form) as ?featurecount) WHERE {
       ?lexemeId dct:language wd:${languageId} .
       ?lexemeId wikibase:lemma ?lemma .
       ?lexemeId wikibase:lexicalCategory wd:${posId} .
       ?lexemeId ontolex:lexicalForm ?form .
+      ?form wikibase:grammaticalFeature ?unwanted. 
   `
   for (feature of features) {
     query += `?form wikibase:grammaticalFeature wd:${feature} . `
   }
   query += `
       ?form ontolex:representation ?representation .
-  } order by ?lemma limit ${limit} offset ${offset}`
+ `
+  const filterinput = document.getElementById('lemma-filter-text').value
+  if (filterinput) {
+      query+=`
+      FILTER (`
+      if (filterinput[0] == '\\') {
+        query += filterinput.substring(1)
+      } else if (filterinput[0] == '/' && filterinput.lastIndexOf('/')){
+        query += `REGEX(str(?lemma), '${filterinput.slice(1, filterinput.lastIndexOf('/'))}', '${filterinput.slice(filterinput.lastIndexOf('/') + 1)}') `
+      } else if (filterinput[0] == '-' && filterinput.slice(-1) == '-'){
+        query += `CONTAINS(str(?lemma), '${filterinput.slice(1, -1)}') `
+      } else if (filterinput.slice(-1) == '-'){
+        query += `STRSTARTS(str(?lemma), '${filterinput.slice(0, -1)}') `
+      } else if (filterinput[0] == '-'){
+        query += `STRENDS(str(?lemma), '${filterinput.substring(1)}') `
+      } else {
+        var op = "="
+        var val = filterinput
+        for (initop of [">=", "<=", "=", ">", "<"]){
+          if (filterinput.startsWith(initop)) {
+            op = initop
+            val = filterinput.substring(op.length).trim()
+            break
+          }
+        }
+        query += `str(?lemma) ${op} '${val}'`
+      }
+      query += ")"
+  }
+  query += `
+  }  GROUP by ?lexemeId ?form ?lemma ?representation 
+    HAVING (?featurecount = ${features.length})
+  order by ?lemma limit ${limit} offset ${offset}`
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
   const answer = await (await fetch(sparql)).json()
   var successes = 0
   var fails = 0
   document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (100.00%)`
+  document.getElementById('button-filter').hidden = false
   document.getElementById('output').hidden = false
   for (const line of answer.results.bindings) {
+	  throbberprogress(`Checking representation ${successes + fails + 1} of ${answer.results.bindings.length}`)
     const row = document.getElementById("output").insertRow(1)
     row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
     row.insertCell().innerHTML = line.lemma.value
@@ -348,13 +460,16 @@ async function startcheck() {
     row.insertCell().innerHTML = jsonnn.Z22K1
     if (jsonnn.Z22K1 == line.representation.value) {
       row.insertCell().innerHTML += `✅ `
+      row.className='success'
       successes += 1
     } else {
       row.insertCell().innerHTML += `❌`
+      row.className='failure'
       fails += 1
     }
     document.getElementById('statistics').innerHTML = `${successes} successes, ${fails} fails (${(100.0*successes/(successes+fails)).toFixed(2)}%)`
   }
+  unthrob()
 }
   </script>
 </html>
