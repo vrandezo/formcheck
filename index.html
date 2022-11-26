@@ -17,6 +17,9 @@
         color: blue;
         font-size: 80%;
       }
+      .smalltext { 
+        font-size: 80%;
+      }
       .throbber {
 	      position: absolute;
 	      color: DimGray;
@@ -55,16 +58,21 @@
     </p>
     <p id="input-choice" hidden>
       Input form <br>
-      <input list="forms" id="in-select" value="Q18514 lemma">
+      <span id="input-forms">
+        <input list="forms"> <br>
+      </span>
+      <span onclick="addfeature('input-forms')" class="action" id="addfeature" hide>add feature</span><span class="smalltext"> Leave blank to use lemma</span>
     </p>
     <p id="output-choice" hidden>
       Output form <br>
-      <input list="forms" id="out1-select" onchange="selectedfeature(1)"> <br>
-      <span onclick="addfeature()" class="action" id="addfeature" hide>add feature</span>
+      <span id="output-forms">
+        <input list="forms"> <br>
+      </span>
+      <span onclick="addfeature('output-forms')" class="action" id="addfeature" hide>add feature</span> <span class="smalltext">or press Return to continue</span>
     </p>
     <p id="formcount">&nbsp;</p>
     <p id="lemma-filter-input" hidden>
-      Lemma filter (default operator =)<br>
+      Input filter (default operator =)<br>
       <input id="lemma-filter-text">
     </p>
     <p id="limit-choice" hidden>
@@ -87,7 +95,7 @@
     </p>
     <p id="statistics"></p>
     <table id="output" hidden>
-      <tr><th>Lexeme</th><th>Lemma</th><th>Recorded</th><th>Function</th><th>OK</th></tr>
+      <tr><th>Lexeme</th><th>Lemma</th><th>Input</th></th><th>Recorded</th><th>Function</th><th>OK</th></tr>
     </table>
   </body>
   <datalist id="languages"></datalist>
@@ -274,28 +282,57 @@ async function fillfeatures() {
     forms.appendChild(option);
   }
   // TODO document.getElementById('conditions-choice').hidden = false
-  // TODO document.getElementById('input-choice').hidden = false
-  document.getElementById('out1-select').focus()
+  document.getElementById('input-choice').hidden = false
+  document.getElementById('output-forms').children[0].focus()
   unthrob()
 }
 
-async function selectedfeature(depth) {
+document.getElementById("output-forms").addEventListener('keydown', event => {
+    selectedfeature(event.key)
+});
+
+function getfeatures(elementid) {
+  var features=[]
+  for (const outselect of document.getElementById(elementid).querySelectorAll('input')) {
+    let val = outselect.value.split(' ')[0]
+    if (val) {
+      features.push(val)
+    }
+  }
+  return features
+}
+
+async function selectedfeature(outputselectkey) {
+  if (outputselectkey !== 'Enter')
+    return
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
-  const features = []
-  for (var i = 0; i < depth; i++) {
-    const choiceid = `out${i+1}-select`
-    features.push(document.getElementById(choiceid).value.split(' ')[0])
-  }
+  const inputfeatures = getfeatures('input-forms')
+  const features = getfeatures('output-forms')
   var query = `
   ask {
     ?lexemeId dct:language wd:${languageId} .
     ?lexemeId wikibase:lexicalCategory wd:${posId} .
     ?lexemeId ontolex:lexicalForm ?form .
-  `
-  for (const feature of features) {
-    query += `?form wikibase:grammaticalFeature wd:${feature} . `
+    `
+    for (const feature of features) {
+    query += `?form wikibase:grammaticalFeature wd:${feature} . 
+    `
   }
+  if (inputfeatures) {
+    query += 
+    `?lexemeId ontolex:lexicalForm ?inform .
+    `
+    for (const feature of inputfeatures) {
+      query += `?inform wikibase:grammaticalFeature wd:${feature} . 
+      `
+    }
+    query += `
+      filter not exists {
+        ?inform wikibase:grammaticalFeature ?unwanted.
+        filter(?unwanted not in (wd:${inputfeatures.join(',wd:')}) )
+      }`
+    }
   query += `
     filter not exists {
       ?form wikibase:grammaticalFeature ?unwanted.
@@ -307,48 +344,56 @@ async function selectedfeature(depth) {
   const response = await fetch(sparql)
   const answer = await response.json()
   if (answer.boolean) {
-    getready(languageId, posId, features)
-  } else {
-    addfeature()
-  }
+    getready(languageId, posId, inputfeatures, features)
+  } 
 }
 
-async function addfeature() {
-  const features = []
-  var i = 0
-  while (true) {
-    i += 1
-    if (document.getElementById(`out${i}-select`)) {
-      features.push(document.getElementById(`out${1}-select`).value.split(' ')[0])
-    } else break
-  }
-  const depth = features.length + 1
+async function addfeature(parent) {
   const br = document.createElement("br")
   const input = document.createElement("input")
-  input.setAttribute("id", `out${depth}-select`)
   input.setAttribute("list", "forms")
-  input.setAttribute("onchange", `selectedfeature(${depth})`)
-  document.getElementById(`out${depth-1}-select`).after(br, input)
+  document.getElementById(parent).append(input, br)
   input.focus()
 }
 
-async function countforms(languageId, posId, features) {
+async function countforms(languageId, posId, inputfeatures, features) {
   throbelement('formcount', 'Counting forms...')
   var query = `
-  SELECT (COUNT(?featurecount) as ?count) WHERE {
-    SELECT ?form (COUNT(?form) as ?featurecount) WHERE { 
+  SELECT (COUNT(?featurecount) as ?count) WHERE {`
+    if (inputfeatures.length) {
+      query += `{
+      SELECT ?lexemeId ?inform (COUNT(?inform) as ?infeaturecount)
+      { 
+      ?lexemeId dct:language wd:${languageId} .
+      ?lexemeId wikibase:lexicalCategory wd:${posId} .
+      ?lexemeId ontolex:lexicalForm ?inform .
+      `
+      for (const feature of inputfeatures) {
+        query += `?inform wikibase:grammaticalFeature wd:${feature} . 
+        `
+      }
+      query += `
+      ?inform wikibase:grammaticalFeature ?inunwanted. 
+    }
+            GROUP BY ?lexemeId ?inform
+            HAVING (?infeaturecount=${inputfeatures.length})
+          }`
+    }
+    query += `{
+    SELECT ?lexemeId ?form (COUNT(?form) as ?featurecount)
+    { 
     ?lexemeId dct:language wd:${languageId} .
     ?lexemeId wikibase:lexicalCategory wd:${posId} .
-    ?lexemeId ontolex:lexicalForm ?form .
-    `
+    ?lexemeId ontolex:lexicalForm ?form .`
   for (const feature of features) {
     query += `?form wikibase:grammaticalFeature wd:${feature} . 
     `
   }
   query += `
   ?form wikibase:grammaticalFeature ?unwanted. 
-  } GROUP by ?form
-HAVING (?featurecount = ${features.length})
+  } GROUP by ?lexemeId ?form
+  HAVING (?featurecount = ${features.length})
+  }
 }
   `
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
@@ -359,9 +404,9 @@ HAVING (?featurecount = ${features.length})
   unthrob()
 }
 
-async function getready(languageId, posId, features) {
+async function getready(languageId, posId, inputfeatures, features) {
   document.getElementById('addfeature').hidden = false
-  await countforms(languageId, posId, features)
+  await countforms(languageId, posId, inputfeatures, features)
   document.getElementById('lemma-filter-input').hidden = false
   document.getElementById('limit-choice').hidden = false
   document.getElementById('offset-choice').hidden = false
@@ -377,16 +422,42 @@ async function startcheck() {
   const functionId = document.getElementById('function-select').value.split(' ')[0]
   const limit = document.getElementById('limit-select').value
   const offset = document.getElementById('offset-select').value
-  var i = 0
-  const features = []
-  while (true) {
-    i += 1
-    if (document.getElementById(`out${i}-select`)) {
-      features.push(document.getElementById(`out${i}-select`).value.split(' ')[0])
-    } else break
+  const inputfeatures = getfeatures('input-forms')
+  const features = getfeatures('output-forms')
+
+  const filterinput = document.getElementById('lemma-filter-text').value
+  var filtertext = ""
+  if (filterinput) {
+      let target = inputfeatures.length ? 'input' : 'lemma'
+      filtertext += `
+      FILTER (`
+      if (filterinput[0] == '\\') {
+        filtertext += filterinput.substring(1)
+      } else if (filterinput[0] == '/' && filterinput.lastIndexOf('/')){
+        filtertext += `REGEX(str(?${target}), '${filterinput.slice(1, filterinput.lastIndexOf('/'))}', '${filterinput.slice(filterinput.lastIndexOf('/') + 1)}') `
+      } else if (filterinput[0] == '-' && filterinput.slice(-1) == '-'){
+        filtertext += `CONTAINS(str(?${target}), '${filterinput.slice(1, -1)}') `
+      } else if (filterinput.slice(-1) == '-'){
+        filtertext += `STRSTARTS(str(?${target}), '${filterinput.slice(0, -1)}') `
+      } else if (filterinput[0] == '-'){
+        filtertext += `STRENDS(str(?${target}), '${filterinput.substring(1)}') `
+      } else {
+        let op = "="
+        let val = filterinput
+        for (initop of [">=", "<=", "=", ">", "<"]){
+          if (filterinput.startsWith(initop)) {
+            op = initop
+            val = filterinput.substring(op.length).trim()
+            break
+          }
+        }
+        filtertext += `str(?${target}) ${op} '${val}'`
+      }
+      filtertext += ")"
   }
   var query = `
-    SELECT ?lexemeId ?form ?lemma ?representation (COUNT(?form) as ?featurecount) WHERE {
+    SELECT ?lexemeId ?form ?lemma ?representation ?featurecount ?inform ?input WHERE {
+      { SELECT  ?lexemeId ?form ?lemma ?representation (COUNT(?form) as ?featurecount){
       ?lexemeId dct:language wd:${languageId} .
       ?lexemeId wikibase:lemma ?lemma .
       ?lexemeId wikibase:lexicalCategory wd:${posId} .
@@ -399,37 +470,35 @@ async function startcheck() {
   query += `
       ?form ontolex:representation ?representation .
  `
-  const filterinput = document.getElementById('lemma-filter-text').value
-  if (filterinput) {
-      query+=`
-      FILTER (`
-      if (filterinput[0] == '\\') {
-        query += filterinput.substring(1)
-      } else if (filterinput[0] == '/' && filterinput.lastIndexOf('/')){
-        query += `REGEX(str(?lemma), '${filterinput.slice(1, filterinput.lastIndexOf('/'))}', '${filterinput.slice(filterinput.lastIndexOf('/') + 1)}') `
-      } else if (filterinput[0] == '-' && filterinput.slice(-1) == '-'){
-        query += `CONTAINS(str(?lemma), '${filterinput.slice(1, -1)}') `
-      } else if (filterinput.slice(-1) == '-'){
-        query += `STRSTARTS(str(?lemma), '${filterinput.slice(0, -1)}') `
-      } else if (filterinput[0] == '-'){
-        query += `STRENDS(str(?lemma), '${filterinput.substring(1)}') `
-      } else {
-        var op = "="
-        var val = filterinput
-        for (initop of [">=", "<=", "=", ">", "<"]){
-          if (filterinput.startsWith(initop)) {
-            op = initop
-            val = filterinput.substring(op.length).trim()
-            break
-          }
-        }
-        query += `str(?lemma) ${op} '${val}'`
-      }
-      query += ")"
-  }
+  if (!inputfeatures.length && filtertext)
+    query += filtertext
+
   query += `
   }  GROUP by ?lexemeId ?form ?lemma ?representation 
     HAVING (?featurecount = ${features.length})
+}`
+if (inputfeatures.length) {
+  query += `
+{SELECT  ?lexemeId ?inform ?input (COUNT(?inform) as ?infeaturecount){
+      ?lexemeId dct:language wd:${languageId} .
+      ?lexemeId wikibase:lexicalCategory wd:${posId} .
+      ?lexemeId ontolex:lexicalForm ?inform .
+      ?inform wikibase:grammaticalFeature ?inunwanted. 
+  `
+  for (feature of inputfeatures) {
+    query += `?inform wikibase:grammaticalFeature wd:${feature} . `
+  }
+  query += `
+      ?inform ontolex:representation ?input .`     
+  if (filtertext)
+    query += filtertext
+  query += `
+  }  GROUP by ?lexemeId ?inform ?input 
+    HAVING (?infeaturecount = ${inputfeatures.length})
+}`
+}
+query += `
+}
   order by ?lemma limit ${limit} offset ${offset}`
   const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
   const answer = await (await fetch(sparql)).json()
@@ -443,8 +512,9 @@ async function startcheck() {
     const row = document.getElementById("output").insertRow(1)
     row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
     row.insertCell().innerHTML = line.lemma.value
+    row.insertCell().innerHTML = inputfeatures.length ? line.input.value : line.lemma.value
     row.insertCell().innerHTML = line.representation.value
-    singular = line.lemma.value
+    singular = inputfeatures.length ? line.input.value : line.lemma.value
     const wikifunction = `https://wikifunctions.beta.wmflabs.org/w/api.php?` +
       `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
       `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${functionId}%22%2C%20%22` +
