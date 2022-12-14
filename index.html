@@ -583,6 +583,31 @@ async function getready(languageId, posId, inputfeatures, features) {
   document.getElementById('function-select').focus()
 }
 
+/**
+ * Calls a functions on the Wikifunctioncs Beta. It is assumed that the
+ * function takes a string and returns a string. If it returns anything
+ * but a string, the call went haywire.
+ *
+ * string zid ZID of the functions on Wikifunctions Beta (e.g. Z10210
+ *            for adding an s to the end)
+ * string input the input string
+ */
+async function WikifunctionsBetaFunctionCallStringToString( zid, input ) {
+  const wikifunction = `https://wikifunctions.beta.wmflabs.org/w/api.php?` +
+    `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
+    `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${zid}%22%2C%20%22` +
+    `${zid}K1%22%3A%20%22${input}%22%20%7D&formatversion=2&origin=*`
+  const headers = {
+    'Content-Type': 'application/json',
+    'origin': '*'
+  }
+  const res = await fetch(wikifunction, { headers })
+  const result = await res.json()
+  const text = result.query.wikilambda_function_call.data
+  const jsonnn = JSON.parse(text)
+  return jsonnn.Z22K1
+}
+	  
 async function startcheck() {
   throbelementbyid('button-choice', 'Fetching representations...')
   const languageId = document.getElementById('language-select').value.split(' ')[0]
@@ -694,20 +719,9 @@ query += `
     row.insertCell().innerHTML = inputfeatures.length ? line.input.value : line.lemma.value
     row.insertCell().innerHTML = line.representation.value
     singular = inputfeatures.length ? line.input.value : line.lemma.value
-    const wikifunction = `https://wikifunctions.beta.wmflabs.org/w/api.php?` +
-      `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
-      `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${functionId}%22%2C%20%22` +
-      `${functionId}K1%22%3A%20%22${singular}%22%20%7D&formatversion=2&origin=*`
-    const headers = {
-      'Content-Type': 'application/json',
-      'origin': '*'
-    }
-    const res = await fetch(wikifunction, { headers })
-    const result = await res.json()
-    const text = result.query.wikilambda_function_call.data
-    const jsonnn = JSON.parse(text)
-    row.insertCell().innerHTML = jsonnn.Z22K1
-    if (jsonnn.Z22K1 == line.representation.value) {
+    const morphed = await WikifunctionsBetaFunctionCallStringToString( functionId, singular )
+    row.insertCell().innerHTML = morphed
+    if (morphed == line.representation.value) {
       row.insertCell().innerHTML += `✅ `
       row.className='success'
       successes += 1
