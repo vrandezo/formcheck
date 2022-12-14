@@ -90,7 +90,7 @@
       <span id="output-forms">
         <input list="forms"> <br>
       </span>
-      <span onclick="addfeature('output-forms')" class="action" id="addfeature" hide>add feature</span> <span class="smalltext">or press Return to continue</span>
+      <span onclick="addfeature('output-forms')" class="action" id="addfeature" hide>add feature</span> <span class="smalltext">or</span> <span onclick="getready()" class="action" id="getready" hide>continue</span>
     </p>
     <p id="formcount">&nbsp;</p>
     <p id="lemma-filter-input" hidden>
@@ -403,7 +403,7 @@ async function selectedfeature(outputselectkey) {
   const response = await fetch(sparql)
   const answer = await response.json()
   if (answer.boolean) {
-    getready(languageId, posId, inputfeatures, features)
+    getready()
   } 
 }
 
@@ -572,7 +572,12 @@ async function countforms(languageId, posId, inputfeatures, features) {
   unthrob()
 }
 
-async function getready(languageId, posId, inputfeatures, features) {
+async function getready() {
+  const languageId = document.getElementById('language-select').value.split(' ')[0]
+  const posId = document.getElementById('pos-select').value.split(' ')[0]
+  const inputfeatures = getfeatures('input-forms')
+  const features = getfeatures('output-forms')
+
   document.getElementById('addfeature').hidden = false
   await countforms(languageId, posId, inputfeatures, features)
   document.getElementById('lemma-filter-input').hidden = false
