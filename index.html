@@ -41,7 +41,6 @@
 	      opacity: 0;
       }
       .throbberimage {
-	      background-image:  url('https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Ajax_loader_metal_512.gif/220px-Ajax_loader_metal_512.gif');  
 	      background-position: 0px; 
 	      background-repeat:no-repeat; 
 	      background-size: contain;
@@ -54,7 +53,7 @@
     <p>
       <a href="https://github.com/vrandezo/formcheck">Instructions</a>
     </p>
-    <p id="lexemestotal">&nbsp;</p>
+    <p id="lexemestotal">Initializing...</p>
     <p>
       Language <br>
       <input list="languages" id="language-select" onchange="fillpos()" autofocus>
@@ -148,26 +147,34 @@ function filterresults() {
   }
 }
 
-var throbdiv
-var throbtextelement
+var throbtextelement = document.createElement('span')
+var throbdiv = document.createElement('span')
+
+async function createthrobber() {
+  throbdiv.className='throbber'
+  throbtextelement.className = 'throbbertext'
+  const imageelement = document.createElement('span')
+  imageelement.className = 'throbberimage'
+  throbdiv.insertBefore(imageelement, null);
+  throbdiv.insertBefore(throbtextelement, null);
+
+  const query = 'SELECT  ?url WHERE { wd:Q1447854 wdt:P18 ?url }'
+  const sparql = queryendpoint + (encodeURI(query).replace(/#/g, '%23'))
+  response = await fetch(sparql)
+  answer = await response.json()
+  imageelement.style.backgroundImage =  `url("${answer.results.bindings[0].url.value}")`; 
+  imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
+}
+
+
 function throbelementbyid(elementid, throbtext) {
   const targetelement = document.getElementById(elementid)
   throbelement(targetelement, throbtext)
 }
 
 function throbelement(targetelement, throbtext) {
-  if (throbdiv) unthrob()
-  throbdiv = document.createElement('span')
-  throbdiv.className='throbber'
-  targetelement.parentNode.insertBefore(throbdiv, targetelement);
-  const imageelement = document.createElement('span')
-  imageelement.innerHTML = '&nbsp;&nbsp;&nbsp;'
-  imageelement.className = 'throbberimage'
-  throbdiv.insertBefore(imageelement, null);
-  throbtextelement=document.createElement('span')
-  throbtextelement.className = 'throbbertext'
   throbberprogress(throbtext)
-  throbdiv.insertBefore(throbtextelement, null);
+  targetelement.parentNode.insertBefore(throbdiv, targetelement);
 }
 
 function throbberprogress(throbtext) {
@@ -175,13 +182,10 @@ function throbberprogress(throbtext) {
 }
 
 function unthrob() {
-  if (!throbdiv) return
 	throbdiv.remove()
-	throbdiv=null
 }
 
 async function countlexemes() {
-  throbberprogress('Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -192,11 +196,9 @@ async function countlexemes() {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemestotal').innerHTML = `There are ${count} lexemes in total.`
-  unthrob()
 }
 
 async function filllanguage() {
-  throbelementbyid('lexemestotal', 'Retrieving languages...')
   const query = `
   SELECT ?language ?languageLabel WHERE {
     { select distinct ?language {
@@ -215,13 +217,13 @@ async function filllanguage() {
       result.languageLabel.value;
     languages.appendChild(option);
   }
-  countlexemes()
 }
 
+createthrobber()
 filllanguage()
+countlexemes()
 
 async function countlexemesinlanguage(languageId) {
-  throbelementbyid('lexemesinlanguage', 'Counting lexemes...')
   const query = `
   select (count(?lexemeId) as ?count) {
     ?lexemeId a ontolex:LexicalEntry .
@@ -278,7 +280,6 @@ async function countlexemesinpos(languageId, posId) {
   const answer = await response.json()
   const count = answer.results.bindings[0].count.value
   document.getElementById('lexemesinpos').innerHTML = `${count} lexemes`
-  unthrob()
 }
 
 async function fillfeatures() {
