@@ -82,14 +82,14 @@
       <span id="input-forms">
         <input list="forms"> <br>
       </span>
-      <span onclick="addfeature('input-forms')" class="action" id="addfeature" hide>add feature</span><span class="smalltext"> Leave blank to use lemma</span>
+      <span onclick="addfeature('input-forms')" class="action" id="addinputfeature" hide>add feature</span><span class="smalltext"> Leave blank to use lemma</span>
     </p>
     <p id="output-choice" hidden>
       Output form <br>
       <span id="output-forms">
         <input list="forms"> <br>
       </span>
-      <span onclick="addfeature('output-forms')" class="action" id="addfeature" hide>add feature</span> <span class="smalltext">or</span> <span onclick="getready()" class="action" id="getready" hide>continue</span>
+      <span onclick="addfeature('output-forms')" class="action" id="addoutputfeature" hide>add feature</span> <span class="smalltext">or</span> <span onclick="getready()" class="action" id="getready" hide>continue</span>
     </p>
     <p id="formcount">&nbsp;</p>
     <p id="lemma-filter-input" hidden>
@@ -116,8 +116,10 @@
     </p>
     <p id="statistics"></p>
     <table id="output" hidden>
-      <tr><th>Lexeme</th><th>Lemma</th><th>Input</th></th><th>Recorded</th><th>Function</th><th>OK</th></tr>
-    </table>
+      <thead>
+        <tr><th>Lexeme</th><th>Lemma</th><th>Input</th></th><th>Recorded</th><th>Function</th><th>OK</th></tr>
+      </thead>
+      <tbody id="output-body"></tbody>   </table>
   </body>
   <datalist id="languages"></datalist>
   <datalist id="pos"> </datalist>
@@ -219,6 +221,7 @@ async function filllanguage() {
   }
 }
 
+document.getElementById('language-select').value = ''
 createthrobber()
 filllanguage()
 countlexemes()
@@ -238,6 +241,7 @@ async function countlexemesinlanguage(languageId) {
 }
 
 async function fillpos() {
+  resetpos()
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   await countlexemesinlanguage(languageId)
   document.getElementById('pos-choice').hidden = false
@@ -266,6 +270,13 @@ async function fillpos() {
   document.getElementById('pos-select').focus()
 }
 
+function resetpos() {
+  document.getElementById('pos-choice').hidden = true
+  document.getElementById('pos-select').value=''
+  document.getElementById('lexemesinpos').innerHTML = ''
+  resetfeatures()
+}
+
 async function countlexemesinpos(languageId, posId) {
   throbelementbyid('lexemesinpos', 'Counting lexemes...')
   const query = `
@@ -283,6 +294,12 @@ async function countlexemesinpos(languageId, posId) {
 }
 
 async function fillfeatures() {
+  unready()
+  document.getElementById('input-conditions').innerHTML=''
+  document.getElementById('conditions-table').hidden = true
+  initfeatures('input-forms')
+  initfeatures('output-forms')
+
   const languageId = document.getElementById('language-select').value.split(' ')[0]
   const posId = document.getElementById('pos-select').value.split(' ')[0]
   await countlexemesinpos(languageId, posId)
@@ -310,10 +327,31 @@ async function fillfeatures() {
       result.featureLabel.value;
     forms.appendChild(option);
   }
+
   document.getElementById('conditions-choice').hidden = false
   document.getElementById('input-choice').hidden = false
-  document.getElementById('output-forms').children[0].focus()
+  document.getElementById('addinputfeature').hidden = false
+  document.getElementById('addoutputfeature').hidden = false
+  document.getElementById('input-forms').children[0].focus()
   unthrob()
+}
+
+function resetfeatures() {
+  unready()
+  document.getElementById('lexemesinpos').innerHTML = ''
+  document.getElementById('input-choice').hidden = true
+  initfeatures('input-forms')
+  document.getElementById('output-choice').hidden = true
+  initfeatures('output-forms')
+  document.getElementById('addinputfeature').hidden = true
+  document.getElementById('addoutputfeature').hidden = true
+  document.getElementById('conditions-choice').hidden = true
+  document.getElementById('conditions-table').hidden = true
+  const table = document.getElementById('input-conditions')
+  while (table.firstChild) table.removeChild(table.firstChild)
+  const proplist=document.getElementById("properties")
+  while (proplist.firstChild) proplist.removeChild(proplist.firstChild)
+  document.querySelectorAll('.conditionlist').forEach(elem => elem.remove())
 }
 
 document.getElementById("output-forms").addEventListener('keydown', event => {
@@ -329,6 +367,12 @@ function getfeatures(elementid) {
     }
   }
   return features
+}
+
+function initfeatures(elementid) {
+  element = document.getElementById(elementid)
+  while (element.children.length > 2) element.removeChild(element.lastChild)
+  element.children[0].value = ''
 }
 
 async function selectedfeature(outputselectkey) {
@@ -405,7 +449,9 @@ async function selectedfeature(outputselectkey) {
   const answer = await response.json()
   if (answer.boolean) {
     getready()
-  } 
+  } else (
+    document.getElementById('formcount').innerHTML = 'No forms meet those criteria'
+  )
 }
 
 async function addcondition() {
@@ -487,6 +533,7 @@ async function fillvalues(conditioninput) {
     }
     targetlist.setAttribute('id', targetlistid)
     targetlist.setAttribute('qidval', qidval)
+    targetlist.classList.add('conditionlist')
     document.body.append(targetlist)
 
     unthrob()
@@ -579,7 +626,6 @@ async function getready() {
   const inputfeatures = getfeatures('input-forms')
   const features = getfeatures('output-forms')
 
-  document.getElementById('addfeature').hidden = false
   await countforms(languageId, posId, inputfeatures, features)
   document.getElementById('lemma-filter-input').hidden = false
   document.getElementById('limit-choice').hidden = false
@@ -613,7 +659,25 @@ async function WikifunctionsBetaFunctionCallStringToString( zid, input ) {
   const jsonnn = JSON.parse(text)
   return jsonnn.Z22K1
 }
-	  
+
+function unready() {
+  document.getElementById('formcount').innerHTML = ''
+  document.getElementById('lemma-filter-input').hidden = true
+  if (document.getElementById('hidesuccesses').innerHTML) filterresults()
+  document.getElementById('limit-choice').hidden = true
+  document.getElementById('offset-choice').hidden = true
+  document.getElementById('function-choice').hidden = true
+  document.getElementById('button-choice').hidden = true
+  document.getElementById('lemma-filter-text').value = ''
+  document.getElementById('limit-select').value = '100'
+  document.getElementById('offset-select').value = 0
+  document.getElementById('function-select').value = 'Z801 Echo'
+  document.getElementById('output').hidden = true
+  document.getElementById('output-body').innerHTML=''
+  document.getElementById('statistics').innerHTML = ''
+  document.getElementById('button-filter').hidden = true
+}
+
 async function startcheck() {
   throbelementbyid('button-choice', 'Fetching representations...')
   const languageId = document.getElementById('language-select').value.split(' ')[0]
@@ -719,7 +783,7 @@ query += `
   document.getElementById('output').hidden = false
   for (const line of answer.results.bindings) {
 	  throbberprogress(`Checking representation ${successes + fails + 1} of ${answer.results.bindings.length}`)
-    const row = document.getElementById("output").insertRow(1)
+    const row = document.getElementById("output-body").insertRow(0)
     row.insertCell().innerHTML = `<a href="${line.lexemeId.value}">${line.lexemeId.value.split('y/')[1]}</a>`
     row.insertCell().innerHTML = line.lemma.value
     row.insertCell().innerHTML = inputfeatures.length ? line.input.value : line.lemma.value

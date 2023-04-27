@@ -1,2 +1,2 @@
-- what happens if you move back into a previous field
+- retrieve list of functions from wikifunctions wiki
 
