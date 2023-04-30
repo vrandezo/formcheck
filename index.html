@@ -126,17 +126,11 @@
   <datalist id="properties"></datalist>
   <datalist id="forms"></datalist>
   <datalist id="functions">
-    <option value="Z801 Echo">
-    <option value="Z10187 upper">
-    <option value="Z10056 remove whitespace">
-    <option value="Z10026 say twice">
-    <option value="Z10072 To uppercase">
-    <option value="Z10210 Add s to end">
-    <option value="Z10238 replace y at end with ies">
-    <option value="Z10242 replace ий at end with а">
+    <option value="This list of functions has not been populated">
   </datalist>
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
+const apiendpoint = `https://wikifunctions.beta.wmflabs.org/w/api.php?`
 
 function filterresults() {
   if (document.getElementById('hidesuccesses').innerHTML) {
@@ -225,6 +219,7 @@ document.getElementById('language-select').value = ''
 createthrobber()
 filllanguage()
 countlexemes()
+PopulateFunctionsDatalist('User:William_Avery/formcheck functions')
 
 async function countlexemesinlanguage(languageId) {
   const query = `
@@ -645,7 +640,7 @@ async function getready() {
  * string input the input string
  */
 async function WikifunctionsBetaFunctionCallStringToString( zid, input ) {
-  const wikifunction = `https://wikifunctions.beta.wmflabs.org/w/api.php?` +
+  const wikifunction = apiendpoint +
     `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
     `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${zid}%22%2C%20%22` +
     `${zid}K1%22%3A%20%22${input}%22%20%7D&formatversion=2&origin=*`
@@ -658,6 +653,80 @@ async function WikifunctionsBetaFunctionCallStringToString( zid, input ) {
   const text = result.query.wikilambda_function_call.data
   const jsonnn = JSON.parse(text)
   return jsonnn.Z22K1
+}
+
+async function PopulateFunctionsDatalist(listpage) {
+  let plcontinue = ''
+  const headers = {
+    'Content-Type': 'application/json',
+    'origin': '*'
+  }
+  const titlearray = []
+  do {
+     const searchparams = {
+                        action: 'query',
+                        plnamespace: 0,
+                        pllimit: 50,
+                        titles: listpage,
+                        prop: 'links',
+                        format: 'json',
+                        origin: "*"
+                    }
+      if (plcontinue) searchparams.plcontinue = plcontinue
+
+      const res = await fetch(apiendpoint +
+            new URLSearchParams(searchparams),
+            {headers}
+      )
+
+      const result = await res.json()
+      const listpageid = Object.keys(result.query.pages)[0]
+      for (link of result.query.pages[listpageid].links) {
+        titlearray.push(link.title)
+      }
+      plcontinue =  (result.continue && result.continue.plcontinue) ? result.continue.plcontinue : ''
+
+  } while (plcontinue)
+
+
+  const zidlimit = 50
+  let start = 1
+  const sortarray = []
+  while (start <= titlearray.length) {
+    const end = start  + zidlimit
+    const searchparams = {
+                        action: 'wikilambda_fetch',
+                        zids: titlearray.slice(start, end).join('|'),
+                        format: 'json',
+                        origin: "*",
+                    }
+    const res = await fetch(apiendpoint +
+            new URLSearchParams(searchparams),
+            {headers}
+      )
+    const result = await res.json()
+    console.log(result)
+    for (const zid of Object.keys(result)) {
+      const funcdef = JSON.parse(result[zid].wikilambda_fetch)
+      for (const label of funcdef.Z2K3.Z12K1.slice(1)) {
+        if ('Z11K2' in label) {
+          sortarray.push({zid: zid, label: label.Z11K2})
+          if ('Z11K1' in label && label.Z11K1 == "Z1002")
+            break
+        }
+      }
+    }
+    start = end
+  }
+  sortarray.sort((a, b) => a.label > b.label)
+
+  const functions = document.getElementById('functions')
+  while (functions.firstChild) functions.removeChild(functions.firstChild)
+  for (const func of sortarray) {
+    const option = document.createElement('option');
+    option.value =  func.zid + ' ' + func.label;
+    functions.appendChild(option);
+  }
 }
 
 function unready() {
