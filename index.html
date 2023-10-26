@@ -130,7 +130,7 @@
   </datalist>
   <script>
 const queryendpoint = `https://query.wikidata.org/sparql?format=json&query=`
-const apiendpoint = `https://wikifunctions.org/w/api.php?`
+const apiendpoint = `https://wikifunctions.beta.wmflabs.org/w/api.php?`
 
 function filterresults() {
   if (document.getElementById('hidesuccesses').innerHTML) {
@@ -631,15 +631,15 @@ async function getready() {
 }
 
 /**
- * Calls a functions on Wikifunctioncs. It is assumed that the
+ * Calls a functions on the Wikifunctioncs Beta. It is assumed that the
  * function takes a string and returns a string. If it returns anything
  * but a string, the call went haywire.
  *
- * string zid ZID of the functions on Wikifunctions (e.g. Z11302
- *            for English possessive)
+ * string zid ZID of the functions on Wikifunctions Beta (e.g. Z10210
+ *            for adding an s to the end)
  * string input the input string
  */
-async function WikifunctionsFunctionCallStringToString( zid, input ) {
+async function WikifunctionsBetaFunctionCallStringToString( zid, input ) {
   const wikifunction = apiendpoint +
     `action=wikilambda_function_call&format=json&wikilambda_function_call_zobject=` +
     `%7B%20%22Z1K1%22%3A%20%22Z7%22%2C%20%22Z7K1%22%3A%20%22${zid}%22%2C%20%22` +
@@ -858,7 +858,7 @@ query += `
     row.insertCell().innerHTML = inputfeatures.length ? line.input.value : line.lemma.value
     row.insertCell().innerHTML = line.representation.value
     singular = inputfeatures.length ? line.input.value : line.lemma.value
-    const morphed = await WikifunctionsFunctionCallStringToString( functionId, singular )
+    const morphed = await WikifunctionsBetaFunctionCallStringToString( functionId, singular )
     row.insertCell().innerHTML = morphed
     if (morphed == line.representation.value) {
       row.insertCell().innerHTML += `✅ `
