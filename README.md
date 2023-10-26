@@ -10,4 +10,7 @@ You can select an arbitrary Z-id for the function, not just one from the given
 list. You can also choose arbitrary Q-ids in all the above fields, although
 the system tries to offer you sensible choices.
 
+This video demonstrates the early version:
+https://commons.wikimedia.org/wiki/File:Checking_forms.webm
+
 This is deployed on Github pages: https://vrandezo.github.io/formcheck
